@@ -22,11 +22,88 @@ if (!isset($_SESSION["mikhmon"])) {
   header("Location:../admin.php?id=login");
 } else {
 
+
+  if (substr($userprofile, 0, 1) == "*") {
+    $userprofile = $userprofile;
+  } elseif (substr($userprofile, 0, 1) != "") {
+    $getprofile = $API->comm("/ip/hotspot/user/profile/print", array(
+      "?name" => "$userprofile",
+    ));
+    $userprofile = $getprofile[0]['.id'];
+    if ($userprofile == "") {
+      echo "<b>User Profile not found</b>";
+    }
+  }
+
+  $getpool = $API->comm("/ip/pool/print");
+
+  $getprofile = $API->comm("/ip/hotspot/user/profile/print", array(
+    "?.id" => "$userprofile"
+  ));
+  $profiledetalis = $getprofile[0];
+  $pid = $profiledetalis['.id'];
+  $pname = $profiledetalis['name'];
+  $psharedu = $profiledetalis['shared-users'];
+  $pratelimit = $profiledetalis['rate-limit'];
+  $ponlogin = $profiledetalis['on-login'];
+  $ppool = $profiledetalis['address-pool'];
+  $sparent = $profiledetalis['parent-queue'];
+
+  if(empty($ppool)){$ppool = "none";}
+  if(empty($sparent)){$sparent = "none";}
+
+  $getexpmode = explode(",", $ponlogin)[1];
+
+  if ($getexpmode == "rem") {
+    $getexpmodet = "Remove";
+  } elseif ($getexpmode == "ntf") {
+    $getexpmodet = "Notice";
+  } elseif ($getexpmode == "remc") {
+    $getexpmodet = "Remove & Record";
+  } elseif ($getexpmode == "ntfc") {
+    $getexpmodet = "Notice & Record";
+  } else {
+    $getexpmode = "0";
+    $getexpmodet = "None";
+  }
+
+  $getprice = explode(",", $ponlogin)[2];
+  if ($getprice == "0") {
+    $getprice = "";
+  } else {
+    $getprice = $getprice;
+  }
+
+  $getsprice = explode(",", $ponlogin)[4];
+  if ($getsprice == "0") {
+    $getsprice = "";
+  } else {
+    $getsprice = $getsprice;
+  }
+
+  $getvalid = explode(",", $ponlogin)[3];
+
+  $getgracep = explode(",", $ponlogin)[4];
+
+  $getlocku = explode(",", $ponlogin)[6];
+  if ($getlocku == "") {
+    $getlocku = "Disable";
+  } else {
+    $getlocku = $getlocku;
+  }
+
   $getallqueue = $API->comm("/queue/simple/print", array(
     "?dynamic" => "false",
   ));
 
-  $getpool = $API->comm("/ip/pool/print");
+  $getmonexpired = $API->comm("/system/scheduler/print", array(
+    "?name" => "$pname",
+  ));
+  $monexpired = $getmonexpired[0];
+  $monid = $monexpired['.id'];
+	$pmon = $monexpired['name'];
+	$chkpmon = $monexpired['disabled'];
+	if(empty($pmon) || $chkpmon == "true"){$moncolor = "text-orange";}else{$moncolor = "text-green";}
 
   if (isset($_POST['name'])) {
     $name = (preg_replace('/\s+/', '-',$_POST['name']));
@@ -56,13 +133,13 @@ if (!isset($_SESSION["mikhmon"])) {
     }
 
     $randstarttime = "0".rand(1,5).":".rand(10,59).":".rand(10,59);
-    $randinterval = "00:01:".rand(10,59);
+    $randinterval = "00:02:".rand(10,59);
 
     $parent = ($_POST['parent']);
-    
+
     $record = '; :local mac $"mac-address"; :local time [/system clock get time ]; /system script add name="$date-|-$time-|-$user-|-'.$price.'-|-$address-|-$mac-|-' . $validity . '-|-'.$name.'-|-$comment" owner="$month$year" source="$date" comment="mikhmon"';
     
-    $onlogin = ':put (",'.$expmode.',' . $price . ',' . $validity . ','.$sprice.',,' . $getlock . ',"); {:local comment [ /ip hotspot user get [/ip hotspot user find where name="$user"] comment]; :local ucode [:pic $comment 0 2]; :if ($ucode = "vc" or $ucode = "up" or $comment = "") do={ :local date [ /system clock get date ];:if ([:pick $date 4 5] = "-") do={:local arraybln {"01"="jan";"02"="feb";"03"="mar";"04"="apr";"05"="may";"06"="jun";"07"="jul";"08"="aug";"09"="sep";"10"="oct";"11"="nov";"12"="dec"};:local tgl [:pick $date 8 10];:local bulan [:pick $date 5 7];:local tahun [:pick $date 0 4];:local bln ($arraybln->$bulan);:set $date ($bln."/".$tgl."/".$tahun);};:local year [ :pick $date 7 11 ];:local month [ :pick $date 0 3 ]; /sys sch add name="$user" disable=no start-date=$date interval="' . $validity . '"; :delay 5s; :local exp [ /sys sch get [ /sys sch find where name="$user" ] next-run];:if ([:pick $exp 2 3] = "-") do={:local arraybln {"01"="jan";"02"="feb";"03"="mar";"04"="apr";"05"="may";"06"="jun";"07"="jul";"08"="aug";"09"="sep";"10"="oct";"11"="nov";"12"="dec"};:local tgl [:pick $exp 3 5];:local bulan [:pick $exp 0 2];:local bln ($arraybln->$bulan);:local jam [:pick $exp 6 14];:set $exp ($bln."/".$tgl." ".$jam);};:if ([:pick $exp 4 5] = "-") do={:local arraybln {"01"="jan";"02"="feb";"03"="mar";"04"="apr";"05"="may";"06"="jun";"07"="jul";"08"="aug";"09"="sep";"10"="oct";"11"="nov";"12"="dec"};:local tgl [:pick $exp 8 10];:local bulan [:pick $exp 5 7];:local tahun [:pick $exp 0 4];:local bln ($arraybln->$bulan);:local jam [:pick $exp 6 14];:set $exp ($bln."/".$tgl."/".$tahun." ".$jam);}; :local getxp [len $exp]; :if ($getxp = 15) do={ :local d [:pic $exp 0 6]; :local t [:pic $exp 7 16]; :local s ("/"); :local exp ("$d$s$year $t"); /ip hotspot user set comment="$exp" [find where name="$user"];}; :if ($getxp = 8) do={ /ip hotspot user set comment="$date $exp" [find where name="$user"];}; :if ($getxp > 15) do={ /ip hotspot user set comment="$exp" [find where name="$user"];};:delay 5s; /sys sch remove [find where name="$user"]';
+    $onlogin = ':put (",'.$expmode.',' . $price . ',' . $validity . ','.$sprice.',,' . $getlock . ',"); {:local comment [ /ip hotspot user get [/ip hotspot user find where name="$user"] comment]; :local ucode [:pic $comment 0 2]; :if ($ucode = "vc" or $ucode = "up" or $comment = "") do={ :local date [ /system clock get date ];:local year [ :pick $date 7 11 ];:local month [ :pick $date 0 3 ]; /sys sch add name="$user" disable=no start-date=$date interval="' . $validity . '"; :delay 5s; :local exp [ /sys sch get [ /sys sch find where name="$user" ] next-run]; :local getxp [len $exp]; :if ($getxp = 15) do={ :local d [:pic $exp 0 6]; :local t [:pic $exp 7 16]; :local s ("/"); :local exp ("$d$s$year $t"); /ip hotspot user set comment="$exp" [find where name="$user"];}; :if ($getxp = 8) do={ /ip hotspot user set comment="$date $exp" [find where name="$user"];}; :if ($getxp > 15) do={ /ip hotspot user set comment="$exp" [find where name="$user"];};:delay 5s; /sys sch remove [find where name="$user"]';
     
 
     if ($expmode == "rem") {
@@ -84,32 +161,23 @@ if (!isset($_SESSION["mikhmon"])) {
     }
 
     $bgservice = ':local dateint do={:local montharray ( "01","02","03","04","05","06","07","08","09","10","11","12" );:local days [ :pick $d 8 10 ];:local month [ :pick $d 5 7 ];:local year [ :pick $d 0 4 ];:local monthint ([ :find $montharray $month]);:local month ($monthint + 1);:if ( [len $month] = 1) do={:local zero ("0");:return [:tonum ("$year$zero$month$days")];} else={:return [:tonum ("$year$month$days")];}};:local timeint do={:local hours [ :pick $t 0 2 ];:local minutes [ :pick $t 3 5 ];:return ($hours * 60 + $minutes) ;};:local date [ /system clock get date ];:local time [ /system clock get time ];:local today [$dateint d=$date] ;:local curtime [$timeint t=$time] ;:local tyear [ :pick $date 0 4 ];:local lyear ($tyear-1);:foreach i in=[ /ip hotspot user find where comment~"$tyear" || comment~"$lyear" ] do={:local comment [ /ip hotspot user get $i comment]; :local limit [ /ip hotspot user get $i limit-uptime]; :local name [ /ip hotspot user get $i name]; :local gettime [:pic $comment 11 19];:if ([:pic $comment 4] = "-" and [:pic $comment 7] = "-") do={:local expd [$dateint d=$comment] ;:local expt [$timeint t=$gettime] ;:if (($expd < $today and $expt < $curtime) or ($expd < $today and $expt > $curtime) or ($expd = $today and $expt < $curtime) and $limit != "00:00:01") do={ :if ([:pic $comment 21] = "N") do={[ /ip hotspot user set limit-uptime=1s $i ];[ /ip hotspot active remove [find where user=$name] ];} else={[ /ip hotspot user remove $i ];[ /ip hotspot active remove [find where user=$name] ];}}}}';
+    
 
-    $API->comm("/ip/hotspot/user/profile/add", array(
+    $API->comm("/ip/hotspot/user/profile/set", array(
 			  		  /*"add-mac-cookie" => "yes",*/
+      ".id" => "$pid",
       "name" => "$name",
       "address-pool" => "$addrpool",
       "rate-limit" => "$ratelimit",
       "shared-users" => "$sharedusers",
       "status-autorefresh" => "1m",
-      //"transparent-proxy" => "yes",
+//       "transparent-proxy" => "yes",
       "on-login" => "$onlogin",
       "parent-queue" => "$parent",
     ));
-
     if($expmode != "0"){
-      if (empty($monid)){
-        $API->comm("/system/scheduler/add", array(
-          "name" => "$name",
-          "start-time" => "$randstarttime",
-          "interval" => "$randinterval",
-          "on-event" => "$bgservice",
-          "disabled" => "no",
-          "comment" => "Monitor Profile $name",
-          ));
-      }else{
-      $API->comm("/system/scheduler/set", array(
-        ".id" => "$monid",
+    if (empty($monid)){
+      $API->comm("/system/scheduler/add", array(
         "name" => "$name",
         "start-time" => "$randstarttime",
         "interval" => "$randinterval",
@@ -117,39 +185,46 @@ if (!isset($_SESSION["mikhmon"])) {
         "disabled" => "no",
         "comment" => "Monitor Profile $name",
         ));
-      }}else{
-        $API->comm("/system/scheduler/remove", array(
-          ".id" => "$monid"));
-      }
+    }else{
+    $API->comm("/system/scheduler/set", array(
+      ".id" => "$monid",
+      "name" => "$name",
+      "start-time" => "$randstarttime",
+      "interval" => "$randinterval",
+      "on-event" => "$bgservice",
+      "disabled" => "no",
+      "comment" => "Monitor Profile $name",
+      ));
+    }}else{
+      $API->comm("/system/scheduler/remove", array(
+        ".id" => "$monid"));
+    }
 
-    $getprofile = $API->comm("/ip/hotspot/user/profile/print", array(
-      "?name" => "$name",
-    ));
-    $pid = $getprofile[0]['.id'];
     echo "<script>window.location='./?user-profile=" . $pid . "&session=" . $session . "'</script>";
   }
 }
 ?>
 <div class="row">
 <div class="col-8">
-<div class="card box-bordered">
-  <div class="card-header">
-    <h3><i class="fa fa-plus"></i> <?= $_add.' '.$_user_profile ?> <small id="loader" style="display: none;" ><i><i class='fa fa-circle-o-notch fa-spin'></i> Processing... </i></small></h3>
-  </div>
-  <div class="card-body">
+<div class="card">
+<div class="card-header">
+    <h3><i class="fa fa-edit"></i> <?= $_edit." ".$_user_profile ?> </h3>
+</div>
+<div class="card-body">
 <form autocomplete="off" method="post" action="">
   <div>
-    <a class="btn bg-warning" href="./?hotspot=user-profiles&session=<?= $session; ?>"> <i class="fa fa-close btn-mrg"></i> <?= $_close ?></a>
-    <button type="submit" name="save" class="btn bg-primary btn-mrg" ><i class="fa fa-save btn-mrg"></i> <?= $_save ?></button>
+    <a class="btn bg-warning" href="./?hotspot=user-profiles&session=<?= $session; ?>"> <i class="fa fa-close"></i> <?= $_close?></a>
+    <button type="submit" name="save" class="btn bg-primary" ><i class="fa fa-save"></i> <?= $_save ?></button>
   </div>
 <table class="table">
   <tr>
-    <td class="align-middle"><?= $_name ?></td><td><input class="form-control" type="text" onchange="remSpace();" autocomplete="off" name="name" value="" required="1" autofocus></td>
+    <td><?= $_name ?> <i class="fa fa-ci fa-circle <?= $moncolor ?>"></i></td><td><input class="form-control" type="text" onchange="remSpace();" autocomplete="off" name="name" value="<?= $pname; ?>" required="1" autofocus></td>
   </tr>
   <tr>
     <td class="align-middle">Address Pool</td>
     <td>
     <select class="form-control " name="ppool">
+      <option><?= $ppool; ?></option>
       <option>none</option>
         <?php $TotalReg = count($getpool);
         for ($i = 0; $i < $TotalReg; $i++) {
@@ -161,15 +236,15 @@ if (!isset($_SESSION["mikhmon"])) {
     </td>
   </tr>
   <tr>
-    <td class="align-middle">Shared Users</td><td><input class="form-control" type="text" size="4" autocomplete="off" name="sharedusers" value="1" required="1"></td>
+    <td>Shared Users</td><td><input class="form-control" type="text" size="4" autocomplete="off" name="sharedusers" value="<?= $psharedu; ?>" required="1"></td>
   </tr>
   <tr>
-    <td class="align-middle">Rate limit [up/down]</td><td><input class="form-control" type="text" name="ratelimit" autocomplete="off" value="" placeholder="Example : 512k/1M" ></td>
+    <td>Rate limit [up/down]</td><td><input class="form-control" type="text" name="ratelimit" autocomplete="off" value="<?= $pratelimit; ?>" placeholder="Example : 512k/1M" ></td>
   </tr>
   <tr>
-    <td class="align-middle"><?= $_expired_mode ?></td><td>
+    <td><?= $_expired_mode ?></td><td>
       <select class="form-control" onchange="RequiredV();" id="expmode" name="expmode" required="1">
-        <option value="">Select...</option>
+        <option value="<?= $getexpmode; ?>"><?= $getexpmodet; ?></option>
         <option value="0">None</option>
         <option value="rem">Remove</option>
         <option value="ntf">Notice</option>
@@ -178,23 +253,21 @@ if (!isset($_SESSION["mikhmon"])) {
       </select>
     </td>
   </tr>
-  <tr id="validity" style="display:none;">
-    <td class="align-middle"><?= $_validity ?></td><td><input class="form-control" type="text" id="validi" size="4" autocomplete="off" name="validity" value="" required="1"></td>
-  </tr>
-  <tr id="graceperiod" style="display:none;">
-    <td class="align-middle"><?= $_grace_period ?></td><td><input class="form-control" type="text" id="gracepi" size="4" autocomplete="off" name="graceperiod" placeholder="5m" value="5m" required="1"></td>
+  <tr id="validity" <?php if ($getexpmodet == "None") {echo 'style="display:none;"';}?>>
+    <td><?= $_validity ?></td><td><input class="form-control" type="text" id="validi" size="4" autocomplete="off" name="validity" value="<?= $getvalid; ?>" required="1"></td>
   </tr>
   <tr>
-    <td class="align-middle"><?= $_price.' '.$currency; ?></td><td><input class="form-control" type="text" size="10" min="0" name="price" value="" ></td>
+    <td><?= $_price." ". $currency; ?></td><td><input class="form-control" type="text" min="0" name="price" value="<?= $getprice; ?>" ></td>
   </tr>
   <tr>
-    <td class="align-middle"><?= $_selling_price.' '.$currency; ?></td><td><input class="form-control" type="text" size="10" min="0" name="sprice" value="" ></td>
+    <td class="align-middle"><?= $_selling_price.' '.$currency; ?></td><td><input class="form-control" type="text" size="10" min="0" name="sprice" value="<?= $getsprice; ?>" ></td>
   </tr>
   <tr>
     <td><?= $_lock_user ?></td><td>
       <select class="form-control" id="lockunlock" name="lockunlock" required="1">
-        <option value="Disable">Disable</option>
+        <option value="<?= $getlocku; ?>"><?= $getlocku; ?></option>
         <option value="Enable">Enable</option>
+        <option value="Disable">Disable</option>
       </select>
     </td>
   </tr>
@@ -202,6 +275,7 @@ if (!isset($_SESSION["mikhmon"])) {
     <td class="align-middle">Parent Queue</td>
     <td>
     <select class="form-control " name="parent">
+      <option><?= $sparent; ?></option>
       <option>none</option>
         <?php $TotalReg = count($getallqueue);
         for ($i = 0; $i < $TotalReg; $i++) {
@@ -210,7 +284,7 @@ if (!isset($_SESSION["mikhmon"])) {
         }
         ?>
     </select>
-  </td>
+    </td>
   </tr>
 </table>
 </form>
@@ -239,16 +313,3 @@ if (!isset($_SESSION["mikhmon"])) {
 </div>
 </div>
 </div>
-<script type="text/javascript">
-function remSpace() {
-  var upName = document.getElementsByName("name")[0];
-  var newUpName = upName.value.replace(/\s/g, "-");
-  //alert("<?php if ($currency == in_array($currency, $cekindo['indo'])) {
-            echo "Nama Profile tidak boleh berisi spasi";
-          } else {
-            echo "Profile name can't containing white space!";
-          } ?>");
-  upName.value = newUpName;
-  upName.focus();
-}
-</script>
